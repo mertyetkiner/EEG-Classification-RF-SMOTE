@@ -1,0 +1,79 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from imblearn.over_sampling import SMOTE
+import time
+
+def extract_features(row, eeg_channels):
+    try:
+        features = {}
+        for channel in eeg_channels:
+            features[f'{channel}_value'] = row[channel]
+            features[f'{channel}_mean'] = np.mean(row[channel])
+            features[f'{channel}_median'] = np.median(row[channel])
+            features[f'{channel}_std'] = np.std(row[channel])
+            features[f'{channel}_var'] = np.var(row[channel])
+            features[f'{channel}_max'] = np.max(row[channel])
+        return features
+    except Exception as e:
+        print(f"Error in extract_features function: {e}")
+        return {}
+
+try:
+    print("Loading data set...")
+    df = pd.read_csv('C:\\Masaüstü\\sade_csv_dosyalari\\combined_data\\combined_data.csv')
+    print("Data set loaded.")
+
+    X = df.drop('label', axis=1)
+    y = df['label']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    eeg_channels = [col for col in X.columns if 'eeg' in col]
+
+    print("Applying SMOTE...")
+    smote = SMOTE(random_state=42)
+    X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+    print("SMOTE applied.")
+
+    print("Feature extraction is in progress...")
+    total_samples = X_resampled.shape[0]
+    print(f"Total number of samples: {total_samples}")
+    start_time = time.time()
+    feature_list = []
+    for index, row in X_resampled.iterrows():
+        features = extract_features(row, eeg_channels)
+        feature_list.append(features)
+        if index % 100 == 0:
+            elapsed_time = time.time() - start_time
+            print(f"Number of samples processed: {index}/{total_samples} ({(index/total_samples)*100:.2f}%) - Elapsed time: {elapsed_time:.2f} seconds")
+    features_df = pd.DataFrame(feature_list)
+    print("Feature extraction completed.")
+
+    print("Model is being trained...")
+    model = RandomForestClassifier(random_state=42)
+    model.fit(features_df, y_resampled)
+    print("Model training completed.")
+
+    print("Feature extraction for the test set...")
+    test_features_list = []
+    for index, row in X_test.iterrows():
+        features = extract_features(row, eeg_channels)
+        test_features_list.append(features)
+    test_features_df = pd.DataFrame(test_features_list)
+    print("Completed feature extraction for the test set.")
+
+    print("The model predicts on the test set...")
+    y_pred = model.predict(test_features_df)
+    print("The model's prediction process is complete.")
+
+    print("Evaluating the performance of the model...")
+    accuracy = accuracy_score(y_test, y_pred)
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    class_report = classification_report(y_test, y_pred)
+
+    print("Model Accuracy:", accuracy)
+    print("\nConfusion Matrix:\n", conf_matrix)
+    print("\nClassification Report:\n", class_report)
+except Exception as e:
+    print(f"Error in main process flow: {e}")
